@@ -2,8 +2,8 @@
 
 MoveIt 2 integration on ROS 2 for the **LiteArm robotic manipulator series**.
 
-> **Status:** repository initialized. Source code, packaging and documentation
-> have not landed yet.
+> **Status:** the `litearm_moveit_config` package has landed. Package tests and
+> CI coverage for it are still to come.
 
 ## Scope
 
@@ -11,7 +11,13 @@ MoveIt 2 integration on ROS 2 for the **LiteArm robotic manipulator series**.
 | --- | --- |
 | Product | LiteArm robotic manipulator series |
 | Repository role | MoveIt 2 integration on ROS 2 |
-| Status | Initializing — no source code yet |
+| Status | Active — `litearm_moveit_config` available |
+
+## Packages
+
+| Package | Role |
+| --- | --- |
+| `litearm_moveit_config` | MoveIt 2 configuration for the litearm seven-axis arm: SRDF and collision matrix, KDL kinematics, joint limits derived from the firmware parameter table, OMPL and Pilz planning pipelines, `moveit_controllers`, RViz layout and launch files |
 
 ## Related repositories
 

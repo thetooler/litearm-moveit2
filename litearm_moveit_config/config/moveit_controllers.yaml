@@ -1,0 +1,26 @@
+# moveit_controllers.yaml — MoveIt 侧看到的下位控制器。
+#
+# 指向 ros2_control 里的 joint_trajectory_controller（见
+# litearm_ros2_control/config/litearm_controllers.yaml）。MoveIt 把规划结果作为
+# FollowJointTrajectory action goal 发到这里，JTC 再插值成 MIT 命令。
+#
+# 注意控制器归属：一个 ros2_control 命令接口同时只能被一个激活的控制器 claim。
+# 因此不要同时激活另一个 claim 这 7 个关节 position/velocity 的控制器。
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+
+moveit_simple_controller_manager:
+  controller_names:
+    - joint_trajectory_controller
+
+  joint_trajectory_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - joint1
+      - joint2
+      - joint3
+      - joint4
+      - joint5
+      - joint6
+      - joint7

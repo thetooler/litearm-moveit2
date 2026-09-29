@@ -1,0 +1,12 @@
+# initial_positions.yaml — 启动/RViz 交互的初始关节角。
+#
+# 全零位（与固件的零点一致）。
+# 由 tools/gen_from_firmware_config.py 生成。
+initial_positions:
+  joint1: 0.0
+  joint2: 0.0
+  joint3: 0.0
+  joint4: 0.0
+  joint5: 0.0
+  joint6: 0.0
+  joint7: 0.0

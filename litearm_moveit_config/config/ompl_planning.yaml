@@ -1,0 +1,80 @@
+# ompl_planning.yaml — OMPL 规划流水线配置。
+#
+# ⚠️ planning_plugin（单数）不能省
+# ------------------------------
+# MoveIt 2 的 PlanningPipeline 同时认「单数 planning_plugin」与「复数
+# planning_plugins」两种参数。只给复数时，某些加载路径会退回到内置默认值
+# chomp_interface/CHOMPPlanner 并在日志里打印：
+#
+#     Multiple planning plugins available. You should specify the
+#     '~planning_plugin' parameter. Using 'chomp_interface/CHOMPPlanner' for now.
+#
+# 那是本配置踩过的坑：CHOMP 没有配参数，规划会「成功但返回空轨迹」
+# （error_code=1、planning_time=0、轨迹点数 0），极难定位。两个都写才稳。
+planning_plugin: ompl_interface/OMPLPlanner
+planning_plugins:
+  - ompl_interface/OMPLPlanner
+
+# 请求适配器：顺序有意义，而且是反直觉的那种"有意义"。
+#
+# 适配器链的组装方式（moveit_core/planning_request_adapter/planning_request_adapter.cpp）：
+#     for (int i = adapters_.size() - 1; i >= 0; --i) fn = wrap(adapters_[i], fn);
+#
+# 从列表末尾往前逐个包装，所以 adapters_[0] 是最外层 —— 它**预处理最先、
+# 后处理最后**。结论：列表顺序 = 预处理的执行顺序，后处理则反过来。
+#
+# 由此两件事：
+#   1. AddTimeOptimalParameterization 排在最前 = 时间参数化最后做（对）。
+#   2. Ruckig 官方要求"在某个时间参数化算法之后运行"（见
+#      share/moveit_ros_planning/planning_request_adapters_plugin_description.xml：
+#      Best used after a time parameterization algorithm such as
+#      TimeOptimalParameterization），所以它必须排在
+#      AddTimeOptimalParameterization **之前**。放到它后面会被随后的时间
+#      参数化整段覆盖，等于没加。
+#
+# 另注：AddTimeOptimalParameterization 的官方说明是 "Not jerk limited"，
+# 而 Ruckig 是 jerk 受限的（双 S 曲线）。两者串起来才既时间最优又 jerk 受限。
+# jerk 上限来自 config/joint_limits.yaml（由 tools/gen_from_firmware_config.py
+# 从固件参数表的 joint[].jerk 派生）。
+#
+# FixStartState* 系列是纯预处理（把起止状态拉回合法域：越界/自碰/超出工作
+# 空间边界），是"规划总是失败"类问题最常见的原因。
+request_adapters: >-
+  default_planner_request_adapters/AddRuckigTrajectorySmoothing
+  default_planner_request_adapters/AddTimeOptimalParameterization
+  default_planner_request_adapters/ResolveConstraintFrames
+  default_planner_request_adapters/FixWorkspaceBounds
+  default_planner_request_adapters/FixStartStateBounds
+  default_planner_request_adapters/FixStartStateCollision
+  default_planner_request_adapters/FixStartStatePathConstraints
+
+start_state_max_bounds_error: 0.1
+
+planner_configs:
+  RRTConnectkConfigDefault:
+    type: geometric::RRTConnect
+    range: 0.0
+  RRTstar:
+    type: geometric::RRTstar
+    range: 0.0
+    goal_bias: 0.05
+    delay_collision_checking: 1
+  PRM:
+    type: geometric::PRM
+    max_nearest_neighbors: 10
+  ESTkConfigDefault:
+    type: geometric::EST
+    range: 0.0
+    goal_bias: 0.05
+
+litearm_arm:
+  # RRTConnect 对 7 轴冗余串链最稳，作为默认。
+  default_planner_config: RRTConnectkConfigDefault
+  planner_configs:
+    - RRTConnectkConfigDefault
+    - RRTstar
+    - PRM
+    - ESTkConfigDefault
+  # 投影评测用前两个关节（肩部），对这条链的构型空间覆盖最好。
+  projection_evaluator: joints(joint1,joint2)
+  longest_valid_segment_fraction: 0.01

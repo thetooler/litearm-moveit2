@@ -1,0 +1,12 @@
+# MoveIt Setup Assistant 的标记文件。
+#
+# 本配置包是脚本生成 + 人工撰写的（碰撞矩阵由 tools/compute_collision_matrix.py
+# 从真实网格算出），没有经过 setup assistant 的 GUI 向导。保留本文件是为了
+# 方便日后用 setup assistant 打开继续编辑。
+#
+# 注意：运行时不读本文件（moveit_configs_utils / RViz 的 MoveIt 插件都通过
+# ament_index 查包）。package_path 是 setup assistant 自己维护的元数据，
+# 故意写成相对路径（本文件所在目录即包根），不固化任何机器的绝对路径；
+# 用 setup assistant 打开并保存时它会按当时机器重写。
+moveit_config:
+  package_path: .

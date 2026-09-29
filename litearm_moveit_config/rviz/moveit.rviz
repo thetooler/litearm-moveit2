@@ -1,0 +1,189 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /MotionPlanning1
+        - /MotionPlanning1/Scene Robot1
+        - /MotionPlanning1/Planning Request1
+  - Class: rviz_common/Help
+    Name: Help
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Value: false
+    # ── 相机：点云（3D）+ 彩色图（2D）───────────────────────────────────────
+    # 点云就是喂给 obstacle_manager 的那路，**只有 xyz**（刻意不带 rgb，见
+    # orbbec_camera_node.py 的 _make_pointcloud），所以这里按 Z 轴着色 ——
+    # 它用来看"场景里有什么、离多高"，不是用来看画面的。
+    # 要看画面用下面那路彩色图。两者都在 camera_color_optical_frame 里，
+    # 经 ee_link 的静态 TF 挂到 base_link 上。
+    - Class: rviz_default_plugins/PointCloud2
+      Name: 相机点云
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /camera/depth/points
+      Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.01
+      Style: Points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Name: 相机彩色图
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /camera/color/image
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Normalize Range: true
+      Value: true
+    # /servo/target_pose：相机识别到的目标在 base_link 里的**绝对位置**。
+    # 虚拟相机与真实相机都发这个话题（语义一致：物体在 base_link 下的估计位姿），
+    # 所以这一个显示两边通用。用 Axes 形状是为了位置和朝向都一眼可读 ——
+    # ⚠ 朝向恒为单位四元数（单视图观测不到物体自身朝向），所以那三根轴只是"世界系"，
+    #   不是估计出来的姿态；**要核对的是原点位置**。
+    # ⚠ 检测丢失时节点会**停发**，而本显示没有衰减 ⇒ 会留着最后一个位置不动。
+    #   想知道它是不是还活着，同时看「相机彩色图」那一格。
+    - Class: rviz_default_plugins/Pose
+      Name: 视觉目标 /servo/target_pose
+      Enabled: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /servo/target_pose
+      Alpha: 1
+      Axes Length: 0.12
+      Axes Radius: 0.012
+      Color: 255; 0; 255
+      Head Length: 0.07
+      Head Radius: 0.03
+      Shaft Length: 0.12
+      Shaft Radius: 0.012
+      Shape: Axes
+      Value: true
+    - Class: moveit_rviz_plugin/MotionPlanning
+      Name: MotionPlanning
+      Planned Path:
+        Loop Animation: true
+        State Display Time: 0.05 s
+        Trajectory Topic: display_planned_path
+        # 轨迹点显示间隔：轨迹点越密，RViz 重放越平滑但越吃 CPU
+        Interrupt Display: false
+        Show Robot Visual: true
+        Show Robot Collision: false
+        Links:
+          base_link:
+            Show Axes: false
+            Show Trail: false
+          ee_link:
+            Show Axes: true
+            Show Trail: false
+      Planning Metrics:
+        Payload: 1
+        Show Joint Torques: false
+        Show Manipulability: false
+        Show Manipulability Index: false
+        Show Weight Limit: false
+        Show Reachability: false
+        Show Collision: false
+      Planning Request:
+        Colliding Link Color: 255; 0; 0
+        Goal State Alpha: 1
+        Goal State Color: 250; 128; 0
+        Planning Group: litearm_arm
+        Query Goal State: true
+        Query Start State: false
+        Show Workspace: false
+        Start State Alpha: 1
+        Start State Color: 0; 255; 0
+      Planning Scene Topic: monitored_planning_scene
+      Robot Description: robot_description
+      Scene Geometry:
+        Scene Alpha: 1
+        Show Scene Geometry: true
+        Voxel Coloring: Z-Axis
+        Voxel Rendering: Occupied Voxels
+      Scene Robot:
+        Robot Alpha: 0.5
+        Show Scene Robot: true
+      Value: true
+      Move Group Namespace: ""
+      # 显示碰撞接触点：调碰撞矩阵或排查"为什么这个位形被判自碰"时很有用
+      Collision Contacts: 30
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: base_link
+    Frame Rate: 30
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 1.6
+      Focal Point:
+        X: 0.0
+        Y: 0.0
+        Z: 0.35
+      Name: Current View
+      Pitch: 0.35
+      Target Frame: base_link
+      Yaw: -0.8
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 975
+  Help:
+    collapsed: false
+  Hide Left Dock: false
+  Hide Right Dock: false
+  MotionPlanning:
+    collapsed: false
+  MotionPlanning - Trajectory Slider:
+    collapsed: false
+  QMainWindow State: 000000ff00000000fd0000000100000000000002b400000375fc0200000005fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000004100fffffffb000000100044006900730070006c006100790073010000003d00000123000000c900fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e00670100000166000001910000018800fffffffb0000000800480065006c0070000000029a0000006e0000006e00fffffffb0000000a0056006900650077007301000002fd000000b5000000a400ffffff000001f60000037500000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Views:
+    collapsed: false
+  Width: 1200

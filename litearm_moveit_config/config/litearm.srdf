@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<!--
+  litearm.srdf — MoveIt 语义描述。
+
+  组定义
+  ——————
+  litearm_arm：从 base_link 到 ee_link 的完整 7 轴链。本体没有夹爪/末端执行器，
+  ee_link 是固定在 joint7 上的工具法兰（URDF 里是 fixed joint）。
+
+  disable_collisions 的来源
+  ————————————————————————-
+  下面的碰撞矩阵由 tools/compute_collision_matrix.py 用真实网格算出，不是手写
+  猜测：在 150 个位形（零位 + 随机）下逐对计算碰撞点云的最小距离，只禁用
+  「结构相邻（关节处网格天然穿插）」与「每个位形都接触」两类。
+
+  刻意【不】禁用「某些位形下会接近/接触」的 link 对 —— 那正是 MoveIt 需要
+  检查并避开的区域。当前保留检查的 28 对中，最需要注意的几对是：
+
+      joint1  ↔ joint7    3/150 个位形下接触，最小距离 0.1mm
+      joint1  ↔ ee_link   3/150 个位形下接触，最小距离 0.4mm
+      base_link ↔ ee_link 1/150 个位形下接触，最小距离 0.1mm
+
+  即该臂在某些「收拢」构型下小臂/末端会贴到基座与 J1 外壳。MoveIt 会把这类
+  位形判为自碰撞，这是期望行为。改 URDF 或换网格后必须重新生成（默认自动
+  用 ament_index 定位已安装的 litearm 包，无需手工传路径）：
+
+      python3 tools/compute_collision_matrix.py > srdf_snippet.xml
+
+  需要指定别的 URDF / 网格目录时，参数用法见脚本 docstring ——
+  本注释位于 XML 里，注释体不能出现以双连字符开头的命令行参数（解析器会
+  报 not well-formed），故此处不展开。
+
+  然后把结果替换到下面的 disable_collisions 区块。
+-->
+<robot name="litearm">
+
+  <!-- ── 规划组：base_link → ee_link 的 7 轴链 ── -->
+  <group name="litearm_arm">
+    <chain base_link="base_link" tip_link="ee_link"/>
+  </group>
+
+  <!-- ── 命名状态 ── -->
+  <!-- zero：全零位（与固件零点一致）。上电后的默认构型。 -->
+  <group_state name="zero" group="litearm_arm">
+    <joint name="joint1" value="0"/>
+    <joint name="joint2" value="0"/>
+    <joint name="joint3" value="0"/>
+    <joint name="joint4" value="0"/>
+    <joint name="joint5" value="0"/>
+    <joint name="joint6" value="0"/>
+    <joint name="joint7" value="0"/>
+  </group_state>
+
+  <!-- ready：肘部抬起的舒展构型。比全零位更适合作为规划起点 —— 全零位是
+       "手臂竖直上举"的奇异附近姿态，笛卡尔规划在那里容易失败。
+       关节角均在 joint_limits.yaml 的限位内，且不自碰。 -->
+  <group_state name="ready" group="litearm_arm">
+    <joint name="joint1" value="0"/>
+    <joint name="joint2" value="0"/>
+    <joint name="joint3" value="0"/>
+    <joint name="joint4" value="-1.5708"/>
+    <joint name="joint5" value="0"/>
+    <joint name="joint6" value="0"/>
+    <joint name="joint7" value="0"/>
+  </group_state>
+  <!-- ── 虚拟关节：固定基座 ── -->
+  <virtual_joint name="virtual_joint" type="fixed" parent_frame="world" child_link="base_link"/>
+
+  <!-- ── 碰撞矩阵（tools/compute_collision_matrix.py 生成）── -->
+  <!-- 8 个结构相邻对：碰撞网格在关节处天然互相穿插，与位形无关 -->
+  <disable_collisions link1="base_link" link2="joint1" reason="Adjacent"/>
+  <disable_collisions link1="joint1" link2="joint2" reason="Adjacent"/>
+  <disable_collisions link1="joint2" link2="joint3" reason="Adjacent"/>
+  <disable_collisions link1="joint3" link2="joint4" reason="Adjacent"/>
+  <disable_collisions link1="joint4" link2="joint5" reason="Adjacent"/>
+  <disable_collisions link1="joint5" link2="joint6" reason="Adjacent"/>
+  <disable_collisions link1="joint6" link2="joint7" reason="Adjacent"/>
+  <disable_collisions link1="joint7" link2="ee_link" reason="Adjacent"/>
+
+</robot>

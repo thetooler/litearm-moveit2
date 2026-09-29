@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!--
+  litearm.urdf.xacro — MoveIt 侧引用的机器人描述入口（瘦包装）。
+
+  真正的描述在 litearm_ros2_control 里：它用 xacro:include 引入 litearm 描述包
+  的 URDF（工作区自带的 ``src/litearm``，上游快照自 robot_description/ 仓库），
+  再追加 ros2_control 声明。
+  这里只做一层转出，让本包符合 MoveIt 的目录惯例
+  （MoveItConfigsBuilder 默认在 config/litearm.urdf.xacro 找 URDF），
+  同时让 launch 传入的 xacro 参数（如 litearm_shm_name）能一路透传下去 ——
+  xacro 的 arg 是全文件全局的，跨 include 可见。
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="litearm">
+  <xacro:include filename="$(find litearm_ros2_control)/urdf/litearm.urdf.xacro"/>
+</robot>

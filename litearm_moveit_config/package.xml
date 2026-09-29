@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>litearm_moveit_config</name>
+  <version>1.0.0</version>
+  <description>
+    litearm 七轴机械臂的 MoveIt2 配置：SRDF、KDL 运动学、关节限位、
+    OMPL 规划流水线与 move_group 启动文件。配合 litearm_ros2_control
+    适配层使用，可对真机做运动规划与执行。
+  </description>
+  <maintainer email="TODO@email.com">TODO</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- 运动学与语义描述来自控制适配层（内含上游 litearm 描述包） -->
+  <exec_depend>litearm_ros2_control</exec_depend>
+  <exec_depend>litearm</exec_depend>
+
+  <exec_depend>moveit</exec_depend>
+  <exec_depend>moveit_configs_utils</exec_depend>
+  <exec_depend>moveit_planners_ompl</exec_depend>
+  <exec_depend>moveit_kinematics</exec_depend>
+  <exec_depend>moveit_ros_move_group</exec_depend>
+  <exec_depend>moveit_ros_visualization</exec_depend>
+  <exec_depend>moveit_simple_controller_manager</exec_depend>
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>joint_state_broadcaster</exec_depend>
+  <exec_depend>joint_trajectory_controller</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <!-- tools/compute_collision_matrix.py 的运行时依赖（只在重新生成碰撞矩阵时需要） -->
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

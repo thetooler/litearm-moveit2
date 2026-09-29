@@ -1,0 +1,91 @@
+# joint_limits.yaml — MoveIt 规划用关节限位。
+#
+# 数值全部来自 litearm-stm32 固件的参数表
+# （User/litearm/params/defaults.c 与 joint_limit_macros.h），不是 URDF 里的
+# 原始值：固件的限位刻意比 URDF 收窄 1°，那是工程自己的安全余量。
+# 让 MoveIt 的规划空间与固件运行期的安全包络一致，避免规划出界后被固件拒绝。
+#
+# jerk 限位供 AddRuckigTrajectorySmoothing（双 S 曲线）使用；缺了它 Ruckig
+# 会用自己的默认值，与固件 move_j 的 S 曲线包络不一致。
+#
+# ⚠️ 本文件由 tools/gen_from_firmware_config.py 生成，请勿手工维护。
+#    改固件参数表后重跑：
+#      python3 tools/gen_from_firmware_config.py --firmware-root <litearm-stm32>
+
+joint_limits:
+  joint1:
+    has_position_limits: true
+    min_position: -2.809547
+    max_position: 2.809547
+    has_velocity_limits: true
+    max_velocity: 2.000000
+    has_acceleration_limits: true
+    max_acceleration: 8.000000
+    has_jerk_limits: true
+    max_jerk: 160.000000
+
+  joint2:
+    has_position_limits: true
+    min_position: -1.727547
+    max_position: 1.727547
+    has_velocity_limits: true
+    max_velocity: 2.000000
+    has_acceleration_limits: true
+    max_acceleration: 8.000000
+    has_jerk_limits: true
+    max_jerk: 160.000000
+
+  joint3:
+    has_position_limits: true
+    min_position: -2.809547
+    max_position: 2.809547
+    has_velocity_limits: true
+    max_velocity: 1.750000
+    has_acceleration_limits: true
+    max_acceleration: 7.000000
+    has_jerk_limits: true
+    max_jerk: 140.000000
+
+  joint4:
+    has_position_limits: true
+    min_position: -3.071547
+    max_position: 0.017547
+    has_velocity_limits: true
+    max_velocity: 1.750000
+    has_acceleration_limits: true
+    max_acceleration: 7.000000
+    has_jerk_limits: true
+    max_jerk: 140.000000
+
+  joint5:
+    has_position_limits: true
+    min_position: -2.809547
+    max_position: 2.809547
+    has_velocity_limits: true
+    max_velocity: 2.000000
+    has_acceleration_limits: true
+    max_acceleration: 9.000000
+    has_jerk_limits: true
+    max_jerk: 180.000000
+
+  joint6:
+    has_position_limits: true
+    min_position: -1.553547
+    max_position: 1.553547
+    has_velocity_limits: true
+    max_velocity: 2.000000
+    has_acceleration_limits: true
+    max_acceleration: 9.000000
+    has_jerk_limits: true
+    max_jerk: 180.000000
+
+  joint7:
+    has_position_limits: true
+    min_position: -1.553547
+    max_position: 1.553547
+    has_velocity_limits: true
+    max_velocity: 2.000000
+    has_acceleration_limits: true
+    max_acceleration: 9.000000
+    has_jerk_limits: true
+    max_jerk: 180.000000
