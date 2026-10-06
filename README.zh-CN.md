@@ -17,17 +17,14 @@ source install/setup.bash
 ros2 launch litearm_moveit_config demo.launch.py
 ```
 
-`demo.launch.py` 把 dry run 钉死：控制栈在一个 pty 假固件上走真实协议，因此不接任何
-硬件也能规划并执行。
+`demo.launch.py` 用 `start_control:=false` 起 MoveIt：可以在 RViz 里规划，而 Execute 需要
+控制栈，控制栈又需要 USB 另一头真的接着机械臂。本部署**没有 dry-run**：硬件组件经
+litearm C++ SDK 直接与真板子通信。
 
-⚠ 这套栈是**单实例**的。硬件守护进程会锁住共享内存段，第二个守护进程会拒绝启动：
-
-```text
-另一个 litearm 硬件守护进程已持有 /dev/shm/litearm_hw.lock；同一块板子只允许一个控制进程。
-```
-
-此时 `move_group` 照常起来、照常能规划 —— 规划不需要守护进程，执行才需要 —— 所以症状是
-「控制器不见了」，而不是「launch 挂了」。先停掉另一个栈，或给这个栈换一个 `shm_name`。
+⚠ 这套栈是**单实例**的，而让它单实例的是**串口**：组件独占机械臂的 USB CDC 链路，SDK 对其加
+独占 `flock`，于是第二个控制栈打不开串口、它的硬件组件 configure 失败。此时 `move_group`
+照常起来、照常能规划 —— 规划不需要硬件，执行才需要 —— 所以症状是「控制器不见了」，而不是
+「launch 挂了」。先停掉另一个栈。
 
 RViz 里 MotionPlanning 面板的规划组是 `litearm_arm`。拖动交互式标记，或选一个 SRDF
 命名状态再点 Plan & Execute：
@@ -41,8 +38,8 @@ RViz 里 MotionPlanning 面板的规划组是 `litearm_arm`。拖动交互式标
 
 ```bash
 export ROS_DOMAIN_ID=42; export ROS_LOCALHOST_ONLY=1             # 见下方说明
-ros2 run litearm_moveit_config acceptance_moveit.sh              # 只规划
-ros2 run litearm_moveit_config acceptance_moveit.sh --execute    # 规划并执行
+ros2 run litearm_moveit_config acceptance_moveit.sh                    # 只规划，不起控制栈
+ros2 run litearm_moveit_config acceptance_moveit.sh --execute --real   # 真机：规划并执行
 ```
 
 ⚠ 先导出这两个变量。脚本只在它们**未设置**时才用默认值，因此如果当前 shell 里已经有
@@ -60,7 +57,14 @@ ros2 launch litearm_moveit_config litearm_moveit.launch.py
 急停可触达。
 
 控制栈已在别处运行（例如真机调试时手动起的）时加 `start_control:=false`，避免两个
-`controller_manager` 抢同一批命令接口。
+`controller_manager` 抢同一批命令接口。`port` 留空（默认）按 VID:PID `1d50:606f`
+自动发现板子；接多块板卡时用 `port:=/dev/ttyACM1` 指定。
+
+这条 launch 还会在配置硬件时**清掉机械臂上锁存的故障**（`clear_faults`，默认开）。
+固件会把急停或关节故障锁存住，并在 RESET 之前一律拒绝 ENABLE —— 没有这一步，故障之后
+每次启动都要先单独跑一趟 `litearm_driver`。清故障发生在链路已连、尚未使能、尚未下发任何
+帧的时候，并且会打一条 WARNING；如果成因还在，固件会重新置位，ENABLE 会带着原因报错。
+想让锁存故障**拦住启动**（例如刚出过事故、想先看清机械臂状态）就加 `clear_faults:=false`。
 
 ### 从另一个终端连上这套栈
 
@@ -87,7 +91,7 @@ export ROS_DOMAIN_ID=42; export ROS_LOCALHOST_ONLY=1
 | [MoveIt Quickstart in RViz](https://moveit.picknik.ai/humble/doc/tutorials/quickstart_in_rviz/quickstart_in_rviz_tutorial.html) | 本 launch 打开的就是这个面板：规划组、规划路径、交互式标记 |
 | [MoveIt Setup Assistant](https://moveit.picknik.ai/humble/doc/examples/setup_assistant/setup_assistant_tutorial.html) | `config/` 下的 SRDF、关节限位、运动学文件是怎么生成的 |
 | [URDF and SRDF](https://moveit.picknik.ai/humble/doc/examples/urdf_srdf/urdf_srdf_tutorial.html) | 机器人描述与本包语义描述的分工 |
-| [Kinematics Configuration](https://moveit.picknik.ai/humble/doc/examples/kinematics_configuration/kinematics_configuration_tutorial.html) | `config/kinematics.yaml`，这里用 SNS-IK 换掉了 KDL |
+| [Kinematics Configuration](https://moveit.picknik.ai/humble/doc/examples/kinematics_configuration/kinematics_configuration_tutorial.html) | `config/kinematics.yaml`，IK 求解器的选择与预算 |
 | [Low Level Controllers](https://moveit.picknik.ai/humble/doc/examples/controller_configuration/controller_configuration_tutorial.html) | MoveIt 如何把轨迹交给 ros2_control —— `config/moveit_controllers.yaml` 实现的正是它 |
 | [Move Group C++ Interface](https://moveit.picknik.ai/humble/doc/examples/move_group_interface/move_group_interface_tutorial.html) | 不经过 RViz，在自己的节点里规划并执行 |
 | [MoveIt Task Constructor](https://moveit.picknik.ai/humble/doc/examples/moveit_task_constructor/moveit_task_constructor_tutorial.html) | 多阶段任务（如抓取放置），也就是 `litearm_manipulation` 的方向 |
@@ -108,12 +112,14 @@ export ROS_DOMAIN_ID=42; export ROS_LOCALHOST_ONLY=1
 
 | 包 | 作用 |
 | --- | --- |
-| `litearm_moveit_config` | litearm 七轴臂的 MoveIt 2 配置：SRDF 与碰撞矩阵、SNS-IK 运动学、由固件参数表派生的关节限位、OMPL 规划流水线、`moveit_controllers`、RViz 布局、launch 文件，以及验收探针 |
+| `litearm_moveit_config` | litearm 七轴臂的 MoveIt 2 配置：SRDF 与碰撞矩阵、KDL 运动学、由固件参数表派生的关节限位、OMPL 规划流水线、`moveit_controllers`、RViz 布局、launch 文件，以及验收探针 |
 
 其中两点在各自文件头部有详细说明，这里只给结论：
 
-- **IK 求解器是 SNS-IK，不是 KDL。** KDL 会漏掉真实存在的解 —— 本臂实测：4 个种子各试
-  一遍，705 ms 内全部无解，而这些位姿 SNS-IK 解得出来。两者的命中率对比写在
+- **IK 求解器是 KDL（MoveIt 自带）。** 它随 moveit_core 一起装好，工作区不需要额外的
+  插件包。KDL 会漏掉真实存在的解 —— 本臂实测：4 个种子各试一遍，705 ms 内可能全部无解，
+  而这些位姿 SNS-IK 解得出来 —— 所以当规划表现为**间歇性失败**而不是几何不可达时，
+  换回 SNS-IK：配方、插件名陷阱（必须用 `::` 形式）与命中率对比都写在
   `config/kinematics.yaml` 里。
 - **Pilz 流水线默认不加载。** 本包只用 OMPL 规划。`config/pilz_cartesian_limits.yaml`
   的存在只是为了让日后启用 Pilz 时不必再补文件。
