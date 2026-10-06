@@ -1,48 +1,45 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""litearm_moveit.launch.py — 起 litearm 的 MoveIt 规划栈（可选含底层控制栈）。
+"""litearm_moveit.launch.py — the MoveIt planning stack for the litearm arm.
 
-按需组合：
+Starts, in any combination:
 
-    1. 控制栈   litearm_ros2_control/litearm_control.launch.py
-                （硬件守护进程 + controller_manager + JSB + JTC）
-    2. move_group   MoveIt 规划节点（OMPL + KDL）
-    3. RViz     MoveIt 运动规划面板
+    1. the control stack   litearm_ros2_control/litearm_control.launch.py
+                           (ros2_control_node + the direct-USB hardware component
+                           + controller_manager + JSB + JTC)
+    2. move_group          MoveIt planning (OMPL + KDL)
+    3. RViz                the MoveIt MotionPlanning panel
 
-默认三件一起起。若控制栈已在别处运行（例如真机调试时手动起的），
-用 start_control:=false 只起 MoveIt 部分，避免两个 controller_manager
-抢同一批命令接口。
+All three start by default. When the control stack already runs somewhere else
+(for example a bring-up shell you started by hand), pass start_control:=false so
+that two controller_managers do not fight over the same command interfaces.
 
-    # 真机（板子已上电、USB 已连、license 已激活）
+    # real arm (board powered, USB connected, licence activated)
     ros2 launch litearm_moveit_config litearm_moveit.launch.py
 
-    # 无硬件全链路演练
-    ros2 launch litearm_moveit_config litearm_moveit.launch.py dry_run:=true
+    # a different USB device
+    ros2 launch litearm_moveit_config litearm_moveit.launch.py port:=/dev/ttyACM1
 
-    # 只起 MoveIt（控制栈已在运行）
+    # let a latched fault stop the launch instead of clearing it
+    ros2 launch litearm_moveit_config litearm_moveit.launch.py clear_faults:=false
+
+The control stack clears a latched fault on the arm while configuring it (clear_faults,
+on by default). The firmware latches an EMERGENCY or a joint_fault and then refuses
+ENABLE until a reset, which would otherwise make every bring-up after a fault a two-step
+operation. Turn it off when you want the fault to stop the launch so you can look at the
+arm first.
+
+    # MoveIt only, control stack already running
     ros2 launch litearm_moveit_config litearm_moveit.launch.py start_control:=false
 
-前馈由**固件**算（无需在这里开任何开关）：PD 增益与重力/摩擦/积分/kd_extra
-前馈都在 litearm-stm32 固件里，模型由 URDF 生成、编译进固件。默认通道
-（MOVE_JS）下**没有 M·q̈ 与 C·q̇**——MOVE_JS 没有加速度源。
+Feed-forward is the firmware's business: the PD gains and the gravity, friction,
+integral and kd_extra terms live in the litearm-stm32 firmware, whose model is
+generated from the URDF and compiled in. The MOVE_JS channel this stack uses has
+no M·q̈ or C·q̇ term, because MOVE_JS has no acceleration source.
 
-下面五个开关是**三态**，默认空 = 不碰固件（固件出厂掩码已带 G/惯量/科氏/摩擦/
-积分/量化/速度参考）：
-
-    gravity_compensation:=true|false    覆盖 FF_G
-    friction_compensation:=true|false   覆盖 FF_FRICTION
-    inertia_compensation:=true|false    覆盖 FF_INERTIA|FF_CORIOLIS（MOVE_JS 下无效）
-    integral_compensation:=true|false   覆盖 FF_INTEGRAL
-    damping_compensation:=true|false    覆盖 kd_extra 向量（true = 恢复出厂值）
-
-要退回纯 PD（例如 A/B 对照），五项都给 false：
-    ros2 launch litearm_moveit_config litearm_moveit.launch.py \\
-        gravity_compensation:=false friction_compensation:=false \\
-        inertia_compensation:=false integral_compensation:=false \\
-        damping_compensation:=false
-
-想自己算前馈（KP/Kd/effort 逐帧生效）请用控制栈的 mit_passthrough:=true，
-并把 joint_trajectory_controller 的 command_interfaces 改成相应组合。
+Unlike the shared-memory deployment, this one has no dry-run mode: the direct-USB
+component talks to the real board, so a launch either has an arm on the other end
+of the USB cable or its hardware component fails to configure.
 """
 
 import os
@@ -56,55 +53,64 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from moveit_configs_utils import MoveItConfigsBuilder
 
-from litearm_ros2_control.ros_env import isolation_hint, parse_bool, ros_isolation_env
+DEFAULT_DOMAIN_ID = "42"
+"""Deliberately not 0: domain 0 is the one other equipment on the network uses."""
 
 
-def _is_true(value: str) -> bool:
-    return parse_bool(value, False)
+def _parse_bool(value, fallback=False):
+    if value is None:
+        return fallback
+    text = str(value).strip().lower()
+    if text in ("1", "true", "yes", "on"):
+        return True
+    if text in ("0", "false", "no", "off", ""):
+        return False
+    return fallback
+
+
+def _isolation_env(domain_id, localhost_only):
+    """The environment every node of this stack gets: fixed domain, localhost only."""
+    return {
+        "ROS_DOMAIN_ID": str(domain_id).strip() or DEFAULT_DOMAIN_ID,
+        "ROS_LOCALHOST_ONLY": "1" if _parse_bool(localhost_only, True) else "0",
+    }
+
+
+def _isolation_hint(domain_id, localhost_only):
+    domain = str(domain_id).strip() or DEFAULT_DOMAIN_ID
+    if _parse_bool(localhost_only, True):
+        return f"export ROS_DOMAIN_ID={domain}; export ROS_LOCALHOST_ONLY=1"
+    return f"export ROS_DOMAIN_ID={domain}    (localhost-only is off: expect cross-machine traffic)"
+
+
+def _is_true(value):
+    return _parse_bool(value, False)
 
 
 def _declare_arguments():
     return [
         DeclareLaunchArgument("start_control", default_value="true",
-                              description="是否一并启动 ros2_control 控制栈"),
-        DeclareLaunchArgument("dry_run", default_value="false",
-                              description="透传给控制栈：true = 无硬件模式"),
+                              description="Also start the ros2_control stack"),
         DeclareLaunchArgument("use_rviz", default_value="true",
-                              description="是否启动 RViz2（MoveIt 运动规划面板）"),
+                              description="Start RViz2 with the MoveIt MotionPlanning panel"),
         DeclareLaunchArgument("port", default_value="",
-                              description="透传给控制栈：litearm-stm32 的 USB CDC "
-                                          "设备路径，留空 = 自动发现（1d50:606f）"),
-        DeclareLaunchArgument("shm_name", default_value="/litearm_hw",
-                              description="透传给控制栈：共享内存段名"),
-        DeclareLaunchArgument("daemon_rate_hz", default_value="0",
-                              description="透传给控制栈：守护进程命令下发频率，0 = 用默认值"),
-        # 五个前馈开关是**三态**：默认空 = 不碰固件（固件自己有出厂掩码，
-        # 出厂就带 G/惯量/科氏/摩擦/积分/量化/速度参考）。
-        # 换底层之前这里是 true（守护进程在 tau_ff 上自己叠前馈）；现在前馈
-        # 由固件算，再传 true 只是"把已经开着的位再置一次"——无害但没意义，
-        # 反而会让人以为 MoveIt 入口和直接起控制栈是两套行为。
-        DeclareLaunchArgument("gravity_compensation", default_value="",
-                              description="透传给控制栈：覆盖固件 ff_mask 的 FF_G 位"
-                                          "（空 = 不碰固件，true/false = 置位/清位）"),
-        DeclareLaunchArgument("friction_compensation", default_value="",
-                              description="透传给控制栈：覆盖固件 ff_mask 的 FF_FRICTION 位"),
-        DeclareLaunchArgument("inertia_compensation", default_value="",
-                              description="透传给控制栈：覆盖固件 ff_mask 的 "
-                                          "FF_INERTIA|FF_CORIOLIS 位（⚠ MOVE_JS 通道下"
-                                          "固件不算惯量项，置位无用）"),
-        DeclareLaunchArgument("integral_compensation", default_value="",
-                              description="透传给控制栈：覆盖固件 ff_mask 的 FF_INTEGRAL 位"),
-        DeclareLaunchArgument("damping_compensation", default_value="",
-                              description="透传给控制栈：覆盖固件 kd_extra 向量"
-                                          "（false = 清零，true = 恢复出厂值）"),
+                              description="Passed to the control stack: USB CDC device "
+                                          "path; empty = auto-discovery (1d50:606f)"),
+        DeclareLaunchArgument("clear_faults", default_value="true",
+                              description="Passed to the control stack: clear a latched "
+                                          "arm fault (EMERGENCY / joint_fault) before the "
+                                          "hardware is enabled, so a bring-up after a fault "
+                                          "stays a single command; false lets the fault stop "
+                                          "the launch instead"),
         DeclareLaunchArgument("log_level", default_value="info",
-                              description="move_group 日志级别"),
-        DeclareLaunchArgument("ros_domain_id", default_value="42",
-                              description="本栈使用的 ROS 域（默认刻意避开 0）。"
-                                          "要与外部系统对接时设 0"),
+                              description="move_group log level"),
+        DeclareLaunchArgument("ros_domain_id", default_value=DEFAULT_DOMAIN_ID,
+                              description="ROS domain of this stack (deliberately not 0); "
+                                          "set 0 to integrate with another system"),
         DeclareLaunchArgument("ros_localhost_only", default_value="true",
-                              description="true = 只在本机发现。跨机串扰会让 RViz "
-                                          "显示别人的机器人、/move_action 出现多个 server"),
+                              description="true = localhost discovery only: a second robot "
+                                          "on the network otherwise shows up in RViz and "
+                                          "as a second /move_action server"),
     ]
 
 
@@ -112,27 +118,20 @@ def _launch_setup(context, *_args, **_kwargs):
     resolve = lambda name: LaunchConfiguration(name).perform(context)  # noqa: E731
     start_control = _is_true(resolve("start_control"))
     use_rviz = _is_true(resolve("use_rviz"))
-    shm_name = resolve("shm_name")
-    dry_run = resolve("dry_run")
-    port = resolve("port")
-    daemon_rate_hz = resolve("daemon_rate_hz")
-    gravity_compensation = resolve("gravity_compensation")
-    friction_compensation = resolve("friction_compensation")
-    inertia_compensation = resolve("inertia_compensation")
-    integral_compensation = resolve("integral_compensation")
-    damping_compensation = resolve("damping_compensation")
-    domain_id = resolve("ros_domain_id").strip() or "42"
+    port = resolve("port").strip()
+    domain_id = resolve("ros_domain_id").strip() or DEFAULT_DOMAIN_ID
     localhost_only = resolve("ros_localhost_only")
-    env = ros_isolation_env(domain_id, localhost_only)
+    env = _isolation_env(domain_id, localhost_only)
 
     moveit_share = get_package_share_directory("litearm_moveit_config")
     control_share = get_package_share_directory("litearm_ros2_control")
 
-    # shm_name 必须与控制栈一致：MoveIt 侧展开 URDF 时同样要注入，
-    # 否则 move_group 拿到的 robot_description 与真正加载的硬件插件参数不符。
+    # The MoveIt side expands the same URDF the control stack does, so the port
+    # argument has to reach both; a mismatch would not error, it would just leave
+    # move_group describing a robot the controller_manager is not running.
     moveit_config = (
         MoveItConfigsBuilder("litearm", package_name="litearm_moveit_config")
-        .robot_description(mappings={"litearm_shm_name": shm_name})
+        .robot_description(mappings={"litearm_port": port})
         .planning_pipelines(pipelines=["ompl"])
         .to_moveit_configs()
     )
@@ -144,18 +143,11 @@ def _launch_setup(context, *_args, **_kwargs):
             PythonLaunchDescriptionSource(
                 os.path.join(control_share, "launch", "litearm_control.launch.py")),
             launch_arguments={
-                "dry_run": dry_run,
                 "port": port,
-                "shm_name": shm_name,
-                "daemon_rate_hz": daemon_rate_hz,
-                "gravity_compensation": gravity_compensation,
-                "friction_compensation": friction_compensation,
-                "inertia_compensation": inertia_compensation,
-                "integral_compensation": integral_compensation,
-                "damping_compensation": damping_compensation,
-                "use_rviz": "false",  # 控制栈自带的 RViz 与下面的 MoveIt RViz 二选一
-                # 隔离参数必须转发：被 include 的进程要落在同一个域里，
-                # 否则 move_group 根本看不到 controller_manager 的 action。
+                "clear_faults": "true" if _is_true(resolve("clear_faults")) else "false",
+                # The isolation arguments have to be forwarded: the included nodes
+                # land in their own environment, and move_group only sees the
+                # controller_manager actions when both sides share a domain.
                 "ros_domain_id": domain_id,
                 "ros_localhost_only": localhost_only,
             }.items(),
@@ -171,20 +163,14 @@ def _launch_setup(context, *_args, **_kwargs):
     ))
 
     if use_rviz:
-        # 是否起 RViz 只用上面这个 Python 判断，**不要**再加运行时
-        # IfCondition(LaunchConfiguration("use_rviz"))：ROS 2 launch 把
-        # IncludeLaunchDescription 的 launch_arguments 实现为
-        # SetLaunchConfiguration，写入的是共享上下文 —— 上面控制栈的 include
-        # 显式传了 use_rviz:=false（"控制栈 RViz 与 MoveIt RViz 二选一"），
-        # 会把本函数的 use_rviz 配置覆盖成 false，运行时条件随之恒假，
-        # RViz 被静默跳过（本工程踩过：launch 日志里连 rviz2 进程都没有）。
         actions.append(Node(
             package="rviz2",
             executable="rviz2",
             arguments=["-d", os.path.join(moveit_share, "rviz", "moveit.rviz")],
             output="log",
             additional_env=env,
-            # RViz 的 MoveIt 插件要自己拿到这几组参数，不能只依赖 move_group。
+            # RViz's MoveIt plugin needs these parameter groups itself; move_group's
+            # copy does not reach it.
             parameters=[
                 moveit_config.robot_description,
                 moveit_config.robot_description_semantic,
@@ -194,14 +180,13 @@ def _launch_setup(context, *_args, **_kwargs):
             ],
         ))
 
-    banner_target = ("dry-run（pty 假固件）" if _is_true(dry_run)
-                     else f"真机，端口={port or '(自动发现)'}")
     actions.insert(0, LogInfo(msg=(
         "──────── litearm MoveIt ────────\n"
-        f"  {banner_target}\n"
-        "  ⚠ 本 launch 已锁 ROS 域；想在终端里用 ros2 命令行 / 看 RViz 数据，\n"
-        "    请先在你自己的终端里执行：\n"
-        f"        {isolation_hint(domain_id, localhost_only)}\n"
+        f"  control stack: {'started here' if start_control else 'expected to be running'}\n"
+        f"  port: {port or '(auto-discovery, VID:PID 1d50:606f)'}\n"
+        "  ⚠ This launch fixes the ROS domain; to use ros2 commands or the RViz\n"
+        "    GUI from your own terminal, run:\n"
+        f"        {_isolation_hint(domain_id, localhost_only)}\n"
         "────────────────────────────────")))
     return actions
 
