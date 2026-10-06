@@ -18,9 +18,13 @@ planned_trajectory（Humble 版 MoveIt2 的行为），拿不到规划结果做�
 
 真执行只需加 --execute，那时才走 /move_action。
 
-用法：
-  ros2 launch litearm_moveit_config litearm_moveit.launch.py dry_run:=true &
+用法（本部署是直连 USB 的，没有 dry-run 硬件）：
+  # 只规划：不起控制栈，也不接硬件
+  ros2 launch litearm_moveit_config litearm_moveit.launch.py start_control:=false &
   python3 moveit_probe.py                # 只规划（安全）
+
+  # 真机：起控制栈后执行
+  ros2 launch litearm_moveit_config litearm_moveit.launch.py &
   python3 moveit_probe.py --execute      # 规划并执行（会驱动机械臂）
 """
 

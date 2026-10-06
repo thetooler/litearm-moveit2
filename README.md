@@ -18,19 +18,17 @@ source install/setup.bash
 ros2 launch litearm_moveit_config demo.launch.py
 ```
 
-`demo.launch.py` pins dry run: the control stack drives a pty fake firmware over
-the real protocol, so the arm plans and executes with no hardware attached.
+`demo.launch.py` starts MoveIt with `start_control:=false`: the arm plans in RViz,
+and Execute needs a control stack, which needs an arm on the other end of the USB
+cable. This deployment has no dry-run mode — the hardware component talks to the
+real board through the litearm C++ SDK.
 
-⚠ The stack is single-instance. The hardware daemon takes a lock on the SHM
-segment, and a second daemon refuses to start:
-
-```text
-另一个 litearm 硬件守护进程已持有 /dev/shm/litearm_hw.lock；同一块板子只允许一个控制进程。
-```
-
-`move_group` still comes up and still plans — planning does not need the daemon,
-execution does — so the failure shows up as a missing controller rather than as a
-dead launch. Stop the other stack first, or give this one a different `shm_name`.
+⚠ The stack is single-instance, and the serial port is what makes it so: the
+component owns the arm's USB CDC link and the SDK takes an exclusive `flock` on
+it, so a second control stack fails to open the port and its hardware component
+fails to configure. `move_group` still comes up and still plans — planning does
+not need the hardware, execution does — so the failure shows up as a missing
+controller rather than as a dead launch. Stop the other stack first.
 
 In RViz the MotionPlanning panel's planning group is `litearm_arm`. Drag the
 interactive marker, or pick one of the SRDF's named states and press Plan &
@@ -46,8 +44,8 @@ plans to `ready`, prints what it checked, and tears the stack down:
 
 ```bash
 export ROS_DOMAIN_ID=42; export ROS_LOCALHOST_ONLY=1             # see the note
-ros2 run litearm_moveit_config acceptance_moveit.sh              # plan only
-ros2 run litearm_moveit_config acceptance_moveit.sh --execute    # plan and execute
+ros2 run litearm_moveit_config acceptance_moveit.sh                    # plan only, no control stack
+ros2 run litearm_moveit_config acceptance_moveit.sh --execute --real   # plan and execute on the arm
 ```
 
 ⚠ Export those two variables first. The script defaults them only when they are
@@ -66,7 +64,18 @@ ros2 launch litearm_moveit_config litearm_moveit.launch.py
 support the arm and keep the e-stop within reach.
 
 Add `start_control:=false` when a control stack is already running, so that two
-`controller_manager`s do not fight over the same command interfaces.
+`controller_manager`s do not fight over the same command interfaces. Empty `port`
+(the default) auto-discovers the board by VID:PID `1d50:606f`; pass
+`port:=/dev/ttyACM1` when several are attached.
+
+This launch also clears a **latched fault** on the arm while configuring the hardware
+(`clear_faults`, on by default). The firmware latches an emergency stop or a joint fault
+and then refuses ENABLE until it is reset, so without this a bring-up after a fault needs
+a separate `litearm_driver` session first. The reset happens with the link up and nothing
+enabled or streamed, and it is logged as a warning; if the cause is still there the
+firmware latches the fault again and ENABLE fails with a message that names it. Pass
+`clear_faults:=false` when you want a latched fault to stop the launch — after a crash,
+for instance, so you can inspect the arm before anything is enabled.
 
 ### Reaching the stack from another terminal
 
@@ -95,7 +104,7 @@ MoveIt 2 tutorials, Humble edition — the distribution this stack targets:
 | [MoveIt Quickstart in RViz](https://moveit.picknik.ai/humble/doc/tutorials/quickstart_in_rviz/quickstart_in_rviz_tutorial.html) | the panel this launch opens: planning groups, planned paths, the interactive marker |
 | [MoveIt Setup Assistant](https://moveit.picknik.ai/humble/doc/examples/setup_assistant/setup_assistant_tutorial.html) | how the SRDF, joint limits and kinematics file under `config/` are produced |
 | [URDF and SRDF](https://moveit.picknik.ai/humble/doc/examples/urdf_srdf/urdf_srdf_tutorial.html) | the split between the robot's description and this package's semantic description |
-| [Kinematics Configuration](https://moveit.picknik.ai/humble/doc/examples/kinematics_configuration/kinematics_configuration_tutorial.html) | `config/kinematics.yaml`, where SNS-IK replaces KDL |
+| [Kinematics Configuration](https://moveit.picknik.ai/humble/doc/examples/kinematics_configuration/kinematics_configuration_tutorial.html) | `config/kinematics.yaml`, the IK solver and its budget |
 | [Low Level Controllers](https://moveit.picknik.ai/humble/doc/examples/controller_configuration/controller_configuration_tutorial.html) | how MoveIt hands a trajectory to ros2_control — what `config/moveit_controllers.yaml` implements |
 | [Move Group C++ Interface](https://moveit.picknik.ai/humble/doc/examples/move_group_interface/move_group_interface_tutorial.html) | planning and executing from your own node instead of RViz |
 | [MoveIt Task Constructor](https://moveit.picknik.ai/humble/doc/examples/moveit_task_constructor/moveit_task_constructor_tutorial.html) | multi-stage tasks such as pick and place, the direction `litearm_manipulation` takes |
@@ -116,14 +125,16 @@ and [examples](https://moveit.picknik.ai/humble/doc/examples/examples.html).
 
 | Package | Role |
 | --- | --- |
-| `litearm_moveit_config` | MoveIt 2 configuration for the litearm seven-axis arm: SRDF and collision matrix, SNS-IK kinematics, joint limits derived from the firmware parameter table, the OMPL planning pipeline, `moveit_controllers`, RViz layout, launch files, and the acceptance probe |
+| `litearm_moveit_config` | MoveIt 2 configuration for the litearm seven-axis arm: SRDF and collision matrix, KDL kinematics, joint limits derived from the firmware parameter table, the OMPL planning pipeline, `moveit_controllers`, RViz layout, launch files, and the acceptance probe |
 
 Two notes on that list, both of which the package's own headers explain at
 length:
 
-- **The IK solver is SNS-IK, not KDL.** KDL misses poses that exist — measured on
-  this arm, four seeds fail within 705 ms where SNS-IK solves them. The seeded
-  hit rates for both are in `config/kinematics.yaml`.
+- **The IK solver is KDL, MoveIt's default.** It ships with MoveIt, so the
+  workspace needs no extra package. KDL misses poses that exist — measured on this
+  arm, four seeds fail within 705 ms where SNS-IK solves them — so when planning
+  looks intermittent rather than geometric, switch to SNS-IK: the recipe, the
+  plugin-name trap and the measured hit rates are in `config/kinematics.yaml`.
 - **The Pilz pipeline is not loaded.** The package plans with OMPL only.
   `config/pilz_cartesian_limits.yaml` is there so that enabling Pilz needs no new
   file.

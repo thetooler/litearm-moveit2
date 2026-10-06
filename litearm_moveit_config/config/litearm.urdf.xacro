@@ -7,7 +7,7 @@
   再追加 ros2_control 声明。
   这里只做一层转出，让本包符合 MoveIt 的目录惯例
   （MoveItConfigsBuilder 默认在 config/litearm.urdf.xacro 找 URDF），
-  同时让 launch 传入的 xacro 参数（如 litearm_shm_name）能一路透传下去 ——
+  同时让 launch 传入的 xacro 参数（如 litearm_port）能一路透传下去 ——
   xacro 的 arg 是全文件全局的，跨 include 可见。
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="litearm">
