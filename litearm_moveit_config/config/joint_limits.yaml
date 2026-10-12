@@ -13,7 +13,7 @@
 #      python3 tools/gen_from_firmware_config.py --firmware-root <litearm-stm32>
 
 joint_limits:
-  joint1:
+  Joint1:
     has_position_limits: true
     min_position: -2.809547
     max_position: 2.809547
@@ -24,7 +24,7 @@ joint_limits:
     has_jerk_limits: true
     max_jerk: 160.000000
 
-  joint2:
+  Joint2:
     has_position_limits: true
     min_position: -1.727547
     max_position: 1.727547
@@ -35,7 +35,7 @@ joint_limits:
     has_jerk_limits: true
     max_jerk: 160.000000
 
-  joint3:
+  Joint3:
     has_position_limits: true
     min_position: -2.809547
     max_position: 2.809547
@@ -46,7 +46,7 @@ joint_limits:
     has_jerk_limits: true
     max_jerk: 140.000000
 
-  joint4:
+  Joint4:
     has_position_limits: true
     min_position: -3.071547
     max_position: 0.017547
@@ -57,7 +57,7 @@ joint_limits:
     has_jerk_limits: true
     max_jerk: 140.000000
 
-  joint5:
+  Joint5:
     has_position_limits: true
     min_position: -2.809547
     max_position: 2.809547
@@ -68,7 +68,7 @@ joint_limits:
     has_jerk_limits: true
     max_jerk: 180.000000
 
-  joint6:
+  Joint6:
     has_position_limits: true
     min_position: -1.553547
     max_position: 1.553547
@@ -79,7 +79,7 @@ joint_limits:
     has_jerk_limits: true
     max_jerk: 180.000000
 
-  joint7:
+  Joint7:
     has_position_limits: true
     min_position: -1.553547
     max_position: 1.553547

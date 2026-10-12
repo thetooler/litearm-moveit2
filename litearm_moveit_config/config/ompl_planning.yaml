@@ -76,5 +76,5 @@ litearm_arm:
     - PRM
     - ESTkConfigDefault
   # 投影评测用前两个关节（肩部），对这条链的构型空间覆盖最好。
-  projection_evaluator: joints(joint1,joint2)
+  projection_evaluator: joints(Joint1,Joint2)
   longest_valid_segment_fraction: 0.01

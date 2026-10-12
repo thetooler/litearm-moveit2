@@ -4,7 +4,7 @@
 # 的 pilz_cartesian_limits() 用的，启用时无需再补文件。
 #
 # 限速按固件参数表的 joint[].vel_max（关节空间 2 rad/s 量级）折算到末端：
-# 臂展约 0.78m（零位 ee_link 到底座），2 rad/s 对应末端约 0.6~1.0 m/s。
+# 臂展约 0.78m（零位 ee_frame_link 到底座），2 rad/s 对应末端约 0.6~1.0 m/s。
 # 这里取偏保守的 0.4 m/s，需要更快再按实际负载调。
 cartesian_limits:
   max_trans_vel: 0.4
