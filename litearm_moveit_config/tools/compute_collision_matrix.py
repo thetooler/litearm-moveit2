@@ -26,12 +26,12 @@ MoveIt 的 SRDF 必须告诉它"哪些 link 对不需要做自碰撞检查"。�
 
 用法::
 
-    # 默认：用 ament_index 定位已安装的 litearm 包（不依赖任何绝对路径）
+    # 默认：用 ament_index 定位已安装的 litearm_description 包（不依赖任何绝对路径）
     python3 compute_collision_matrix.py --output srdf_snippet.xml
 
     # 或显式指定
     python3 compute_collision_matrix.py \\
-        --urdf <litearm.urdf> --mesh-root <包含 meshes/ 的包目录> \\
+        --urdf <litearm_description.urdf> --mesh-root <包含 meshes/ 的包目录> \\
         --output srdf_snippet.xml
 
 输出为可直接粘进 SRDF 的 <disable_collisions> 片段。
@@ -55,10 +55,10 @@ def _default_share_dir() -> str:
     except ImportError as exc:  # pragma: no cover - 环境问题而非逻辑分支
         raise SystemExit(f"需要 ament_index_python，请先 source ROS 环境：{exc}")
     try:
-        return get_package_share_directory("litearm")
+        return get_package_share_directory("litearm_description")
     except Exception as exc:  # pragma: no cover
         raise SystemExit(
-            f"ament_index 找不到 litearm 包（colcon build 并 source install/setup.bash 了吗？）：{exc}")
+            f"ament_index 找不到 litearm_description 包（colcon build 并 source install/setup.bash 了吗？）：{exc}")
 
 # URDF 的 rpy 约定：固定轴 XYZ 外旋，等价于 R = Rz(y)Ry(p)Rx(r)
 def rpy_to_matrix(roll: float, pitch: float, yaw: float) -> np.ndarray:
@@ -264,11 +264,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--urdf", default="",
-                        help="URDF 路径；留空用 ament_index 定位已安装的 litearm 包")
+                        help="URDF 路径；留空用 ament_index 定位已安装的 litearm_description 包")
     parser.add_argument("--mesh-root", default="",
                         help="对应 package://<pkg>/ 的本地目录 "
                              "（即包含 meshes/ 的那一级，不是 meshes/ 本身）；"
-                             "留空用 ament_index 定位已安装的 litearm 包")
+                             "留空用 ament_index 定位已安装的 litearm_description 包")
     parser.add_argument("--samples", type=int, default=120,
                         help="随机位形采样数（含零位，默认 120）")
     parser.add_argument("--max-points", type=int, default=12000,
@@ -285,7 +285,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if not args.urdf or not args.mesh_root:
         default_share = _default_share_dir()
-        args.urdf = args.urdf or os.path.join(default_share, "urdf", "litearm.urdf")
+        args.urdf = args.urdf or os.path.join(default_share, "urdf", "litearm_description.urdf")
         args.mesh_root = args.mesh_root or default_share
 
     model = UrdfModel(args.urdf, args.mesh_root, args.max_points)
