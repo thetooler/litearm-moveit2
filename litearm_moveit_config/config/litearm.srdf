@@ -22,7 +22,7 @@
 
   即该臂在某些「收拢」构型下小臂/末端会贴到基座与 J1 外壳。MoveIt 会把这类
   位形判为自碰撞，这是期望行为。改 URDF 或换网格后必须重新生成（默认自动
-  用 ament_index 定位已安装的 litearm 包，无需手工传路径）：
+  用 ament_index 定位已安装的 litearm_description 包，无需手工传路径）：
 
       python3 tools/compute_collision_matrix.py > srdf_snippet.xml
 
