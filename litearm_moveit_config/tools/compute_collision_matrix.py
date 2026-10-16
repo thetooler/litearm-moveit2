@@ -49,7 +49,7 @@ from scipy.spatial import cKDTree
 
 
 def _default_share_dir() -> str:
-    """通过 ament_index 定位 litearm 描述包（等价于 xacro 里的 $(find litearm)）。"""
+    """通过 ament_index 定位 litearm 描述包（等价于 xacro 里的 $(find litearm_description)）。"""
     try:
         from ament_index_python.packages import get_package_share_directory
     except ImportError as exc:  # pragma: no cover - 环境问题而非逻辑分支
