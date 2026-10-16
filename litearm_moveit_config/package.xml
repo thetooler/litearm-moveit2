@@ -15,7 +15,7 @@
 
   <!-- 运动学与语义描述来自控制适配层（内含上游 litearm 描述包） -->
   <exec_depend>litearm_ros2_control</exec_depend>
-  <exec_depend>litearm</exec_depend>
+  <exec_depend>litearm_description</exec_depend>
 
   <exec_depend>moveit</exec_depend>
   <exec_depend>moveit_configs_utils</exec_depend>

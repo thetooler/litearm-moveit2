@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # acceptance_moveit.sh — MoveIt 规划链路验收（无硬件）。
 #
-#   起 move_group（含控制栈 dry-run）→ 规划到 ready 位形 → 可选执行 → 收栈
+#   起 move_group（--real 时另起直连 USB 的控制栈）→ 规划到 ready 位形
+#   → 可选执行 → 收栈
 #
 # 用法:
-#   scripts/acceptance_moveit.sh                # 只规划（不驱动机械臂）
-#   scripts/acceptance_moveit.sh --execute      # 规划并执行
-#   scripts/acceptance_moveit.sh --execute --real   # 真机
+#   scripts/acceptance_moveit.sh                    # 只规划（不接硬件、不起控制栈）
+#   scripts/acceptance_moveit.sh --execute --real   # 真机：起控制栈并执行
 #
 # 环境注意（踩过的坑）：ROS 2 默认域 0 且组播发现是全网的。同网段若有其他机器人
 # 在跑 ROS 2，会看到**多个 /move_action server**，规划目标可能被陌生节点的
@@ -55,19 +55,27 @@ source install/setup.bash
 set -u
 
 PROBE_ARGS=()
-DRY="dry_run:=true"
+# 本部署是直连 USB 的，没有 dry-run 硬件：默认只起 MoveIt（start_control:=false），
+# 只有 --real 才把控制栈一起起起来，也才允许执行。
+CTRL="start_control:=false"
+WANT_EXECUTE=0
 for arg in "$@"; do
     case "$arg" in
-        --execute) PROBE_ARGS+=("--execute") ;;
-        --real)    DRY="dry_run:=false"
+        --execute) WANT_EXECUTE=1
+                   PROBE_ARGS+=("--execute") ;;
+        --real)    CTRL="start_control:=true"
                    echo "[accept] ★ 真机模式：机械臂将实际运动，确认空间开阔、已扶好急停" ;;
         *) echo "未知参数: $arg" >&2; exit 2 ;;
     esac
 done
+if [ "$WANT_EXECUTE" = 1 ] && [ "$CTRL" = "start_control:=false" ]; then
+    echo "[accept] --execute 需要控制栈：请加 --real（本部署没有 dry-run 硬件）" >&2
+    exit 2
+fi
 
 rm -f "$LOG"
 setsid ros2 launch litearm_moveit_config litearm_moveit.launch.py \
-    "$DRY" use_rviz:=false >"$LOG" 2>&1 </dev/null &
+    "$CTRL" use_rviz:=false >"$LOG" 2>&1 </dev/null &
 LAUNCH_PID=$!
 echo "[accept] MoveIt 栈已启动 pid=$LAUNCH_PID domain=$ROS_DOMAIN_ID log=$LOG"
 

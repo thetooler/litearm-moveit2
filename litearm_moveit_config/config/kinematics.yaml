@@ -2,64 +2,36 @@
 #
 # 求解器选择
 # ----------
-# 用 **SNS-IK**（Saturation in the Null Space，随机牛顿速度求解器），
-# 源码在 src/sns_ik_lib + src/sns_ik_kinematics_plugin（从参考工程
-# xgsyn_robot/apps/moveit/sns_ik_plugin 搬运，Apache 2.0）。
+# 用 **KDL**：MoveIt 自带（kdl_kinematics_plugin），装了 moveit_core 就有，不需要
+# 工作区里再放任何插件包。之前这里选的是 SNS-IK；插件包不在工作区时，MoveIt 只会
+# 报一句
+#   "Kinematics solver could not be instantiated for joint group litearm_arm"
+# 而规划能力静默降级，所以默认回到自带求解器。
 #
-# 为什么换掉 KDL
-# --------------
-# KDL 是数值解算器里的老古董，命中率是它的短板。实测本臂：
-#   move to pre-grasp 这个阶段，4 个种子（上一帧解 / 当前状态 / 全零 / 限位中点）
-#   各试一遍，705 ms 内**全部无解**；而同一个位姿是几何上可达的
-#   （move_group 的 /check_state_validity 说 valid、笛卡尔直线也走得通）。
-#   KDL 解不出来 → 退回位姿目标 → OMPL 的 goal tree 采不出来
-#   → 整条任务只报一句 GOAL_STATE_INVALID。这是间歇性失败的来源。
-# SNS-IK 是专门为"KDL 失败但解存在"设计的：它在零空间里做饱和优化，
-# 对 7 轴冗余臂尤其合适。
+# ⚠ KDL 的短板（本臂实测，不是传闻）：
+#   同一个几何上可达的位姿，4 个种子（上一帧解 / 当前状态 / 全零 / 限位中点）各试
+#   一遍、705 ms 内可能**全部无解**，而 SNS-IK 解得出来。KDL 解不出来时 OMPL 的
+#   goal tree 采不到样本，整条任务只报 GOAL_STATE_INVALID —— 表现为间歇性规划失败，
+#   而不是"位姿不可达"。
+#
+# 想换回 SNS-IK（命中率更高，代价是工作区要多两个包）：
+#   1. 把 `sns_ik_lib` 与 `sns_ik_kinematics_plugin` 放进工作区并 colcon build；
+#   2. 把下面的 kinematics_solver 改成
+#        sns_ik_kinematics_plugin::SnsIkKinematicsPlugin
+#      ⚠ 必须是 `::` 形式，且逐字等于插件描述 XML 里的 `type` —— pluginlib 按 XML
+#      建表、不做归一化，写成斜杠形式会报 "no factory exists for it"（看着像库没编出来）；
+#   3. 加上插件自己读的参数：solver_type: SNS、loop_period: 0.005、eps: 1e-5、
+#      timeout: 0.2（名字见插件的 initialize()）。
+#   两者的命中率对比（俯视/侧向各 12 次）记录在 README 的「会自己生成的配置」之前
+#   那一节，改之前先看一遍。
 #
 # 参数说明
 # --------
-# kinematics_solver_timeout / attempts 是 **MoveIt 侧**的预算与重试次数；
-# 下面 solver_type / loop_period / eps / timeout 是 **插件自己**读的
-# （见 sns_ik_kinematics_plugin.cpp 的 initialize()）。
-#
-# solver_type 可选：SNS（默认）/ SNS_Optimal / SNS_OptimalScaleMargin /
-#                   SNS_Fast / SNS_FastOptimal / SNS_Base
-#   先按参考工程的默认值 SNS。若收敛率仍不满意，依次试 SNS_Optimal
-#   （更慢更稳）或 SNS_Fast（更快）。
+# kinematics_solver_timeout / attempts 是 **MoveIt 侧**的预算与重试次数。KDL 是迭代
+# 数值解，实测经常用满预算而不是提前收敛，所以给 0.2 s 留余量，而不是上游示例里的
+# 0.005 s。
 litearm_arm:
-  # ⚠⚠ 这个字符串必须**逐字等于**插件描述 XML 里的 `type`，而且是 `::` 形式。
-  #   MoveIt 其它插件（kdl_kinematics_plugin/KDLKinematicsPlugin 那种）用斜杠，
-  #   但那是它们的 XML 也写了斜杠 —— pluginlib 按 XML 建表、不做归一化。
-  #   写成 `sns_ik_kinematics_plugin/SnsIkKinematicsPlugin` 会得到
-  #     "Could not create object of class type … as no factory exists for it"
-  #   （看着像库没编译出来，其实是名字对不上）。
-  kinematics_solver: sns_ik_kinematics_plugin::SnsIkKinematicsPlugin
-  # MoveIt 侧的预算与重试。SNS 是迭代法，单次几十毫秒量级。
+  kinematics_solver: kdl_kinematics_plugin/KDLKinematicsPlugin
+  kinematics_solver_search_resolution: 0.005
   kinematics_solver_timeout: 0.2
   kinematics_solver_attempts: 3
-  # ↓ 插件自己的参数（名字不能改，插件按字面读）
-  solver_type: SNS
-  # 速度环的积分步长；0.005 是插件默认值
-  loop_period: 0.005
-  # 收敛判据（零空间速度的残差）
-  eps: 1e-5
-  # 插件内部每次求解的时间上限。实测 0.05 和 0.2 的成功率**完全一样**
-  # （同一批位姿 9/12 与 5/12），所以不是收敛时间不够；给 0.2 只是留余量。
-  timeout: 0.2
-  #
-  # ★ 实测（本臂 + 品红杯，固定位置扫 12 个偏航角，各 12 次）：
-  #     位姿/姿态        KDL     SNS-IK
-  #     预抓取位A/俯视   12/12     9/12
-  #     预抓取位A/侧向    0/12     5/12   ← 这就是换求解器的理由
-  #     预抓取位B/俯视   12/12     9/12
-  #     预抓取位B/侧向    7/12     5/12
-  #   SNS 把"侧向全灭"救成 5/12；俯视从 12/12 掉到 9/12（仍够用 ——
-  #   而且 mtc_pick_place_node 的 ikSearch 会**多个种子各试一遍**，
-  #   单次 75% 命中率 × 4 个种子 ≈ 99.6%）。
-  #   想再调可换 solver_type：SNS_Optimal（更慢更稳）/ SNS_Fast（更快）。
-  #
-  # ★ 安全性已实测：SNS 插件**自己不做碰撞检查**（源码里没有 avoid_collisions），
-  #   但 MoveIt 会替它做 —— 在目标点放一个 8 cm 碰撞盒后，同一个位姿
-  #   avoid_collisions=true 返回 NO_IK、=false 返回 SUCCESS，
-  #   证明拦截来自碰撞检查而不是运动学无解。
